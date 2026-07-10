@@ -20,6 +20,7 @@
 @interface StreamFrameViewController : UIViewController <ConnectionCallbacks, ControllerSupportDelegate, UserInteractionDelegate, UIScrollViewDelegate>
 #endif
 @property (nonatomic) StreamConfiguration* streamConfig;
+@property (nonatomic, strong) NSOperationQueue *opQueue;
 
 -(void)updatePreferredDisplayMode:(BOOL)streamActive;
 

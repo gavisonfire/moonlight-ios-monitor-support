@@ -126,15 +126,20 @@
         selector:@selector(rendererReady:)
         name:@"MoonlightRendererReady" object:nil];
 
-    if (UIScreen.screens.count > 1) {
-        [self handleScreenConnected:UIScreen.screens[1]];
-    }
+    // Always add observers for screen changes, even if we only have one screen now.
+    // On iPad, UIScreen.screens[1] may be nil until an external display is connected.
+    // Adding observers ensures we catch the UIScreenDidConnectNotification when it arrives.
     [[NSNotificationCenter defaultCenter] addObserver:self
         selector:@selector(screenDidConnect:)
         name:UIScreenDidConnectNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self
         selector:@selector(screenDidDisconnect:)
         name:UIScreenDidDisconnectNotification object:nil];
+
+    // Handle any already-connected secondary screen (e.g., if external display is present)
+    if (UIScreen.screens.count > 1) {
+        [self handleScreenConnected:UIScreen.screens[1]];
+    }
 }
 
 - (void)stopMonitoring {
@@ -261,6 +266,7 @@ vc.view.frame = CGRectMake(0, 0, screen.bounds.size.width, screen.bounds.size.he
 @implementation StreamFrameViewController {
     ControllerSupport *_controllerSupport;
     StreamManager *_streamMan;
+    NSOperationQueue* opQueue;
     TemporarySettings *_settings;
     NSTimer *_inactivityTimer;
     NSTimer *_statsUpdateTimer;
@@ -386,12 +392,12 @@ vc.view.frame = CGRectMake(0, 0, screen.bounds.size.width, screen.bounds.size.he
     _tipLabel.textAlignment = NSTextAlignmentCenter;
     _tipLabel.center = CGPointMake(self.view.frame.size.width / 2, self.view.frame.size.height * 0.9);
     
+    self.opQueue = [[NSOperationQueue alloc] init];
+    self.opQueue.qualityOfService = NSQualityOfServiceUserInteractive;
     _streamMan = [[StreamManager alloc] initWithConfig:self.streamConfig
                                             renderView:_streamView
                                    connectionCallbacks:self];
-    NSOperationQueue* opQueue = [[NSOperationQueue alloc] init];
-    opQueue.qualityOfService = NSQualityOfServiceUserInteractive;
-    [opQueue addOperation:_streamMan];
+    [self.opQueue addOperation:_streamMan];
     
     [[NSNotificationCenter defaultCenter] addObserver:self
                                              selector:@selector(applicationWillResignActive:)
@@ -568,7 +574,21 @@ vc.view.frame = CGRectMake(0, 0, screen.bounds.size.width, screen.bounds.size.he
     [_statsUpdateTimer invalidate];
     _statsUpdateTimer = nil;
     
+    [_streamMan stopStream];
     [self.navigationController popToRootViewControllerAnimated:YES];
+}
+
+- (void) resumeStream {
+    // Reinitialize the stream manager
+    _streamMan = [[StreamManager alloc] initWithConfig:self.streamConfig
+                                                 renderView:self->_streamView
+                                        connectionCallbacks:self];
+    
+    [self->_streamMan setCompletionBlock:^{
+        [self->_streamMan start];
+    }];
+    
+    [opQueue addOperation:self->_streamMan];
 }
 
 // This will fire if the user opens control center or gets a low battery message
@@ -602,6 +622,12 @@ vc.view.frame = CGRectMake(0, 0, screen.bounds.size.width, screen.bounds.size.he
         Log(LOG_I, @"Stopping inactivity timer after becoming active again");
         [_inactivityTimer invalidate];
         _inactivityTimer = nil;
+    }
+    
+    // Check if we need to restart the stream (app was suspended, not backgrounded)
+    if (_streamMan && _streamMan.isExecuting) {
+        Log(LOG_I, @"App became active while streaming - restarting stream");
+        [self resumeStream];
     }
 }
 
