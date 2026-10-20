@@ -27,12 +27,14 @@
 
 
 // ---- External Display View Controller ----
-// Dedicated root VC for the external monitor window. The app is landscape-only,
-// but a bare UIViewController would allow portrait on the external display and
-// present the stream sideways. Lock to landscape and keep the video layer glued
-// to the view bounds so it stays fullscreen across rotations.
+// Dedicated root VC for the external monitor window. The external scene may
+// resolve to portrait regardless of the app's landscape-only setting, so we
+// detect the actual bounds orientation and rotate the video layer 90deg to
+// present the landscape stream upright and fullscreen. Without this the
+// monitor shows the stream sideways.
 @interface ExternalDisplayViewController : UIViewController
 @property (nonatomic, strong) AVSampleBufferDisplayLayer *videoLayer;
+@property (nonatomic) BOOL lastPortrait;
 @end
 
 @implementation ExternalDisplayViewController
@@ -47,8 +49,32 @@
 
 - (void)viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];
-    self.videoLayer.frame = self.view.bounds;
+    if (self.videoLayer == nil) return;
+
+    BOOL portrait = self.view.bounds.size.width < self.view.bounds.size.height;
+    if (portrait == self.lastPortrait) return;
+    self.lastPortrait = portrait;
+
+    CALayer *container = self.view.layer;
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+
+    if (portrait) {
+        // Scene gave us a portrait window: rotate the video layer 90deg so the
+        // landscape stream displays upright, centered, filling the whole screen.
+        CGFloat w = container.bounds.size.width;
+        CGFloat h = container.bounds.size.height;
+        self.videoLayer.bounds = CGRectMake(0, 0, h, w);
+        self.videoLayer.position = CGPointMake(CGRectGetMidX(container.bounds), CGRectGetMidY(container.bounds));
+        self.videoLayer.affineTransform = CGAffineTransformMakeRotation(M_PI_2);
+    } else {
+        self.videoLayer.bounds = container.bounds;
+        self.videoLayer.position = CGPointMake(CGRectGetMidX(container.bounds), CGRectGetMidY(container.bounds));
+        self.videoLayer.affineTransform = CGAffineTransformIdentity;
+    }
     self.videoLayer.contentsScale = self.view.window.screen.scale;
+
+    [CATransaction commit];
 }
 
 @end
@@ -262,8 +288,10 @@ vc.videoLayer = layer;
 [vc.view.layer addSublayer:layer];
 self->_externalLayer = layer;
 
-// Make sure view controller view fills screen too
-vc.view.frame = CGRectMake(0, 0, screen.bounds.size.width, screen.bounds.size.height);
+// NB: do NOT force vc.view.frame to screen.bounds here. The window/scene owns
+// the view's frame; overriding it to a portrait-sized rect is what made the
+// stream render sideways. ExternalDisplayViewController.viewDidLayoutSubviews
+// now handles sizing + rotation instead.
         
         // Waiting UI
         self->_spinner = [[UIActivityIndicatorView alloc]
