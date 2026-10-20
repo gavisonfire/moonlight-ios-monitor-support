@@ -13,14 +13,20 @@
 @implementation SceneDelegate
 
 - (void)scene:(UIScene *)scene willConnectToSession:(UISceneSession *)session options:(UISceneConnectionOptions *)connectionOptions {
-    // Use this method to optionally configure and attach the UIWindow
-    // to the provided UIWindowScene.
     UIWindowScene *windowScene = (UIWindowScene *)scene;
 
+    // External display scenes are owned by ExternalDisplayManager, which creates
+    // the dedicated monitor window (with the AVSampleBufferDisplayLayer) and
+    // attaches it to this scene via initWithWindowScene:. Loading the storyboard
+    // here would put a second, mirrored copy of the main UI on the monitor.
+    if (windowScene.screen != [UIScreen mainScreen]) {
+        return;
+    }
+
+    // Main screen: load the correct storyboard for the current device idiom,
+    // mirroring the old UIMainStoryboardFile / UIMainStoryboardFile~ipad keys.
     UIWindow *window = [[UIWindow alloc] initWithWindowScene:windowScene];
 
-    // Load the correct storyboard for the current device idiom,
-    // mirroring the old UIMainStoryboardFile / UIMainStoryboardFile~ipad keys.
     NSString *storyboardName = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad) ? @"iPad" : @"iPhone";
     UIStoryboard *storyboard = [UIStoryboard storyboardWithName:storyboardName bundle:nil];
 

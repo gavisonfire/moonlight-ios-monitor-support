@@ -211,9 +211,29 @@
 
 - (void)handleScreenConnected:(UIScreen *)screen {
     dispatch_async(dispatch_get_main_queue(), ^{
-        // Create fullscreen window on external display
-        UIWindow *window = [[UIWindow alloc] initWithFrame:screen.bounds];
-        window.screen = screen;
+        // Find the UIWindowScene backing this external display (scene-based iOS).
+        // Creating the window via initWithWindowScene: instead of the legacy
+        // initWithFrame:+window.screen pattern is what gives the monitor window
+        // correct orientation and input routing under the scene lifecycle.
+        UIWindowScene *externalScene = nil;
+        for (UIScene *candidate in UIApplication.sharedApplication.connectedScenes) {
+            if ([candidate isKindOfClass:[UIWindowScene class]]) {
+                UIWindowScene *ws = (UIWindowScene *)candidate;
+                if (ws.screen == screen) {
+                    externalScene = ws;
+                    break;
+                }
+            }
+        }
+        
+        UIWindow *window;
+        if (externalScene != nil) {
+            window = [[UIWindow alloc] initWithWindowScene:externalScene];
+        } else {
+            // Fallback (non-scene path)
+            window = [[UIWindow alloc] initWithFrame:screen.bounds];
+            window.screen = screen;
+        }
         window.backgroundColor = [UIColor blackColor];
         
         ExternalDisplayViewController *vc = [ExternalDisplayViewController new];
