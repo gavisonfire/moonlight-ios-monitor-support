@@ -26,6 +26,34 @@
 #endif
 
 
+// ---- External Display View Controller ----
+// Dedicated root VC for the external monitor window. The app is landscape-only,
+// but a bare UIViewController would allow portrait on the external display and
+// present the stream sideways. Lock to landscape and keep the video layer glued
+// to the view bounds so it stays fullscreen across rotations.
+@interface ExternalDisplayViewController : UIViewController
+@property (nonatomic, strong) AVSampleBufferDisplayLayer *videoLayer;
+@end
+
+@implementation ExternalDisplayViewController
+
+- (UIInterfaceOrientationMask)supportedInterfaceOrientations {
+    return UIInterfaceOrientationMaskLandscape;
+}
+
+- (BOOL)shouldAutorotate {
+    return YES;
+}
+
+- (void)viewDidLayoutSubviews {
+    [super viewDidLayoutSubviews];
+    self.videoLayer.frame = self.view.bounds;
+    self.videoLayer.contentsScale = self.view.window.screen.scale;
+}
+
+@end
+
+
 // ---- External Display Manager ----
 @interface ExternalDisplayManager : NSObject
 + (instancetype)shared;
@@ -188,7 +216,7 @@
         window.screen = screen;
         window.backgroundColor = [UIColor blackColor];
         
-        UIViewController *vc = [UIViewController new];
+        ExternalDisplayViewController *vc = [ExternalDisplayViewController new];
         vc.view.backgroundColor = [UIColor blackColor];
         window.rootViewController = vc;
         
@@ -210,6 +238,7 @@ layer.shouldRasterize = NO;
 layer.drawsAsynchronously = YES;
 layer.hidden = YES;
 
+vc.videoLayer = layer;
 [vc.view.layer addSublayer:layer];
 self->_externalLayer = layer;
 
