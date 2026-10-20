@@ -711,7 +711,10 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
 - (void)setExternalDisplayLayer:(AVSampleBufferDisplayLayer*)layer {
     externalDisplayLayer = layer;
     if (layer != nil) {
-        layer.videoGravity = AVLayerVideoGravityResizeAspect;
+        // Fill the entire external screen by cropping overflow (crop-to-fit),
+        // matching the same intent as handleScreenConnected:. ResizeAspect would
+        // letterbox the video and leave the monitor only partially used.
+        layer.videoGravity = AVLayerVideoGravityResizeAspectFill;
     }
 }
 
