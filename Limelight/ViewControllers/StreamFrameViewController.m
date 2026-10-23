@@ -55,6 +55,10 @@
     if (portrait == self.lastPortrait) return;
     self.lastPortrait = portrait;
 
+    Log(LOG_I, @"EXTDISPLAY layout: view=%@ portrait=%d window=%@ screen=%@",
+        NSStringFromCGRect(self.view.bounds), portrait, self.view.window,
+        self.view.window.screen);
+
     CALayer *container = self.view.layer;
     [CATransaction begin];
     [CATransaction setDisableActions:YES];
@@ -241,6 +245,8 @@
         // Creating the window via initWithWindowScene: instead of the legacy
         // initWithFrame:+window.screen pattern is what gives the monitor window
         // correct orientation and input routing under the scene lifecycle.
+        Log(LOG_I, @"EXTDISPLAY connectedScenes=%lu",
+            (unsigned long)UIApplication.sharedApplication.connectedScenes.count);
         UIWindowScene *externalScene = nil;
         for (UIScene *candidate in UIApplication.sharedApplication.connectedScenes) {
             if ([candidate isKindOfClass:[UIWindowScene class]]) {
@@ -255,8 +261,10 @@
         UIWindow *window;
         if (externalScene != nil) {
             window = [[UIWindow alloc] initWithWindowScene:externalScene];
+            Log(LOG_I, @"EXTDISPLAY connected: screen=%@ bounds=%@ scale=%.2f scene=%p",
+                screen, NSStringFromCGRect(screen.bounds), screen.scale, externalScene);
         } else {
-            // Fallback (non-scene path)
+            Log(LOG_W, @"EXTDISPLAY connected but NO UIWindowScene found for screen=%@ (falling back to legacy window)", screen);
             window = [[UIWindow alloc] initWithFrame:screen.bounds];
             window.screen = screen;
         }

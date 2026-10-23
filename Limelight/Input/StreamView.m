@@ -97,6 +97,7 @@ if (@available(iOS 14.0, *)) {
     void (^setupMouseHandler)(GCMouse*) = ^(GCMouse *mouse) {
         mouse.mouseInput.mouseMovedHandler = ^(GCMouseInput *input,
                                                float deltaX, float deltaY) {
+            Log(LOG_I, @"EXTINPUT mouseMoved delta=(%.1f,%.1f) mouse=%p", deltaX, deltaY, mouse);
 dispatch_async(dispatch_get_main_queue(), ^{
                 LiSendMouseMoveEvent((short)deltaX, (short)-deltaY);
             });
@@ -146,6 +147,8 @@ dispatch_async(dispatch_get_main_queue(), ^{
     }
     
     [self becomeFirstResponder];
+    Log(LOG_I, @"EXTINPUT setupStreamView done: isFirstResponder=%d window=%@ screen=%@",
+        self.isFirstResponder, self.window, self.window.screen);
 }
 
 - (void)startInteractionTimer {
@@ -338,6 +341,8 @@ dispatch_async(dispatch_get_main_queue(), ^{
 #endif
 
 - (void)touchesBegan:(NSSet *)touches withEvent:(UIEvent *)event {
+    Log(LOG_I, @"EXTINPUT touchesBegan count=%lu window=%@ isFirstResponder=%d",
+        (unsigned long)touches.count, self.window, self.isFirstResponder);
     if ([self handleMouseButtonEvent:BUTTON_ACTION_PRESS
                           forTouches:touches
                            withEvent:event]) {
