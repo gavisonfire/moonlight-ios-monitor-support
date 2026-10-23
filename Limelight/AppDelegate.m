@@ -39,6 +39,59 @@ static NSString* DB_NAME = @"Limelight_iOS.sqlite";
     // presents the stream 90deg rotated (and ignores iPad rotation).
     return UIInterfaceOrientationMaskLandscape;
 }
+
+// In a scene-lifecycle app the app delegate's window is never populated, so the
+// supportedInterfaceOrientationsForWindow: above is not consulted for the main
+// window. Actively request landscape geometry once the scene is up; without
+// this the main window flips to portrait chrome (iPad close/minimise buttons on
+// the right edge) as soon as anything perturbs the scene geometry - e.g. the
+// external display scene connecting.
+- (void)requestLandscapeGeometryForScene:(UIWindowScene *)windowScene {
+    if (windowScene == nil) {
+        return;
+    }
+
+    if (@available(iOS 16.0, *)) {
+        UIWindowSceneGeometryPreferencesIOS *prefs =
+            [[UIWindowSceneGeometryPreferencesIOS alloc]
+                initWithInterfaceOrientations:UIInterfaceOrientationMaskLandscape];
+        [windowScene requestGeometryUpdateWithPreferences:prefs
+                                             errorHandler:^(NSError * _Nonnull error) {
+            Log(LOG_W, @"SCENE geometry update failed: %@", error);
+        }];
+        Log(LOG_I, @"SCENE requested landscape geometry for %@", windowScene);
+    } else {
+        [UIViewController attemptRotationToDeviceOrientation];
+    }
+}
+
+- (void)scene:(UIScene *)scene willConnectToSession:(UISceneSession *)session options:(UISceneConnectionOptions *)connectionOptions {
+    if (![scene isKindOfClass:[UIWindowScene class]]) {
+        return;
+    }
+    UIWindowScene *windowScene = (UIWindowScene *)scene;
+    if (session.role != UIWindowSceneSessionRoleApplication) {
+        return;
+    }
+    Log(LOG_I, @"SCENE(appdelegate) willConnect bounds=%@", NSStringFromCGRect(windowScene.coordinateSpace.bounds));
+    [self requestLandscapeGeometryForScene:windowScene];
+}
+
+- (void)sceneDidBecomeActive:(UIScene *)scene {
+    if (![scene isKindOfClass:[UIWindowScene class]]) {
+        return;
+    }
+    UIWindowScene *windowScene = (UIWindowScene *)scene;
+    if (windowScene.session.role != UIWindowSceneSessionRoleApplication) {
+        return;
+    }
+    // Re-assert after activation: this is what catches the flip that happens
+    // once a second scene (the external monitor) attaches.
+    Log(LOG_I, @"SCENE(appdelegate) didBecomeActive bounds=%@ orientation=%ld",
+        NSStringFromCGRect(windowScene.coordinateSpace.bounds),
+        (long)windowScene.interfaceOrientation);
+    [self requestLandscapeGeometryForScene:windowScene];
+}
 #endif
 
 #if !TARGET_OS_TV
