@@ -41,8 +41,13 @@
 
 @implementation ExternalDisplayViewController
 
+// Return ALL orientations for the external display VC. This VC does not own the
+// external scene's geometry; declaring landscape here only made the system fight
+// between the app scene's mask and this one, which is what flipped the monitor.
+// The video layer is rotated in viewDidLayoutSubviews to match whatever the
+// external scene actually resolves to.
 - (UIInterfaceOrientationMask)supportedInterfaceOrientations {
-    return UIInterfaceOrientationMaskLandscape;
+    return UIInterfaceOrientationMaskAll;
 }
 
 - (BOOL)shouldAutorotate {
@@ -97,20 +102,21 @@
     [CATransaction begin];
     [CATransaction setDisableActions:YES];
 
+    // Always size to the container. In the portrait branch the layer is rotated,
+    // so its untransformed bounds are the container's SWAPPED dimensions; the
+    // transform then maps it back over the full container.
+    CGSize c = container.bounds.size;
     if (portrait) {
-        // Scene gave us a portrait window: rotate the video layer 90deg so the
-        // landscape stream displays upright, centered, filling the whole screen.
-        CGFloat w = container.bounds.size.width;
-        CGFloat h = container.bounds.size.height;
-        self.videoLayer.bounds = CGRectMake(0, 0, h, w);
-        self.videoLayer.position = CGPointMake(CGRectGetMidX(container.bounds), CGRectGetMidY(container.bounds));
+        self.videoLayer.bounds = CGRectMake(0, 0, c.height, c.width);
         self.videoLayer.affineTransform = CGAffineTransformMakeRotation(M_PI_2);
     } else {
-        self.videoLayer.bounds = container.bounds;
-        self.videoLayer.position = CGPointMake(CGRectGetMidX(container.bounds), CGRectGetMidY(container.bounds));
+        self.videoLayer.bounds = CGRectMake(0, 0, c.width, c.height);
         self.videoLayer.affineTransform = CGAffineTransformIdentity;
     }
-    self.videoLayer.contentsScale = self.view.window.screen.scale;
+    self.videoLayer.position = CGPointMake(CGRectGetMidX(container.bounds), CGRectGetMidY(container.bounds));
+
+    UIScreen *scr = self.view.window.screen ?: self.videoLayer.window.screen;
+    self.videoLayer.contentsScale = scr.scale > 0 ? scr.scale : [UIScreen mainScreen].scale;
 
     [CATransaction commit];
 }
@@ -303,7 +309,12 @@
             window.screen = screen;
         }
         window.backgroundColor = [UIColor blackColor];
-        
+        // Scene-lifecycle hygiene: a window attached to a UIWindowScene must be
+        // at normal level and start hidden. Creating it visible/at the wrong
+        // level leaves the scene half-attached and the system keeps
+        // re-resolving geometry (the 90deg frame).
+        window.windowLevel = UIWindowLevelNormal;
+
         ExternalDisplayViewController *vc = [ExternalDisplayViewController new];
         vc.view.backgroundColor = [UIColor blackColor];
         window.rootViewController = vc;
@@ -311,10 +322,10 @@
         // Create AVSampleBufferDisplayLayer filling the entire screen
 AVSampleBufferDisplayLayer *layer = [[AVSampleBufferDisplayLayer alloc] init];
 
-// Fill entire screen
-layer.frame = CGRectMake(0, 0, screen.bounds.size.width, screen.bounds.size.height);
-
-// Match screen's native pixel density - fixes pixelation
+// Do NOT set layer.frame here. ExternalDisplayViewController.viewDidLayoutSubviews
+// sizes the layer from the container's bounds and applies the rotation
+// transform. Setting a frame here from screen.bounds gave the layer two
+// competing sources of geometry, which is what left the monitor 90deg off.
 layer.contentsScale = screen.scale;
 
 // Resize to fill completely - no black bars
