@@ -115,7 +115,9 @@
     }
     self.videoLayer.position = CGPointMake(CGRectGetMidX(container.bounds), CGRectGetMidY(container.bounds));
 
-    UIScreen *scr = self.view.window.screen ?: self.videoLayer.window.screen;
+    // AVSampleBufferDisplayLayer is a CALayer, not a UIView, so it has no
+    // `window`. Use the view's window (may be nil before the window attaches).
+    UIScreen *scr = self.view.window.screen ?: [UIScreen mainScreen];
     self.videoLayer.contentsScale = scr.scale > 0 ? scr.scale : [UIScreen mainScreen].scale;
 
     [CATransaction commit];
