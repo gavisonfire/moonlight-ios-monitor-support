@@ -80,6 +80,32 @@
 
 - (void)viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];
+
+    // EXTDIAG: log unconditionally, before any guard, so we can see what the
+    // external scene really reports even when we decide to do nothing.
+    {
+        UIWindowScene *ws = self.view.window.windowScene;
+        UIInterfaceOrientation eff = UIInterfaceOrientationUnknown;
+        CGRect effFrame = CGRectZero;
+        if (@available(iOS 16.0, *)) {
+            if (ws != nil) {
+                eff = ws.effectiveGeometry.interfaceOrientation;
+                effFrame = ws.effectiveGeometry.coordinateSpace.bounds;
+            }
+        }
+        // Keep the format string to plain C types: passing an object where the
+        // formatter expects a scalar is how you get a crash instead of a log.
+        CGAffineTransform t = self.videoLayer ? self.videoLayer.affineTransform : CGAffineTransformIdentity;
+        Log(LOG_I, @"EXTDIAG layout view=%@ layerBounds=%@ rot=(%.3f,%.3f) win=%@ eff=%ld effFrame=%@ sceneOrient=%ld scenes=%lu",
+            NSStringFromCGRect(self.view.bounds),
+            self.videoLayer ? NSStringFromCGRect(self.videoLayer.bounds) : @"nil",
+            t.a, t.b,
+            self.view.window ? @"y" : @"n",
+            (long)eff, NSStringFromCGRect(effFrame),
+            (long)(ws ? ws.interfaceOrientation : 0),
+            (unsigned long)UIApplication.sharedApplication.connectedScenes.count);
+    }
+
     if (self.videoLayer == nil) return;
 
     UIInterfaceOrientationMask mask = [self currentOrientationMask];
@@ -300,6 +326,24 @@
             }
         }
         
+        // EXTDIAG: which scene did we match, and what does it report?
+        {
+            UIInterfaceOrientation eff = UIInterfaceOrientationUnknown;
+            CGRect effFrame = CGRectZero;
+            if (@available(iOS 16.0, *)) {
+                if (externalScene != nil) {
+                    eff = externalScene.effectiveGeometry.interfaceOrientation;
+                    effFrame = externalScene.effectiveGeometry.coordinateSpace.bounds;
+                }
+            }
+            Log(LOG_I, @"EXTDIAG connect screen=%@ screenBounds=%@ scale=%.2f matchedScene=%@ extOrient=%ld eff=%ld effFrame=%@ scenes=%lu",
+                screen, NSStringFromCGRect(screen.bounds), screen.scale,
+                externalScene ? @"y" : @"nil(scene)",
+                (long)(externalScene ? externalScene.interfaceOrientation : 0),
+                (long)eff, NSStringFromCGRect(effFrame),
+                (unsigned long)UIApplication.sharedApplication.connectedScenes.count);
+        }
+
         UIWindow *window;
         if (externalScene != nil) {
             window = [[UIWindow alloc] initWithWindowScene:externalScene];
