@@ -35,6 +35,8 @@
 @interface ExternalDisplayViewController : UIViewController
 @property (nonatomic, strong) AVSampleBufferDisplayLayer *videoLayer;
 @property (nonatomic) BOOL lastPortrait;
+@property (nonatomic) BOOL hasEverLaidOut;
+@property (nonatomic) NSInteger lastAppliedMask;
 @end
 
 @implementation ExternalDisplayViewController
@@ -47,17 +49,49 @@
     return YES;
 }
 
+// The window scene's geometry is the authoritative orientation, not the view's
+// bounds: a view can lay out with stale/landscape bounds while the scene (and
+// therefore the system window chrome, e.g. the iPad close/minimise buttons)
+// is still portrait. effectiveGeometry exists on iOS 16+.
+- (UIInterfaceOrientationMask)currentOrientationMask {
+    UIWindowScene *scene = self.view.window.windowScene;
+    if (scene == nil) {
+        Log(LOG_W, @"EXTDISPLAY orientation: no windowScene, falling back to bounds");
+        return self.view.bounds.size.width < self.view.bounds.size.height
+            ? UIInterfaceOrientationMaskPortrait : UIInterfaceOrientationMaskLandscape;
+    }
+
+    if (@available(iOS 16.0, *)) {
+        if (scene.effectiveGeometry.interfaceOrientation != UIInterfaceOrientationUnknown) {
+            return scene.effectiveGeometry.interfaceOrientation == UIInterfaceOrientationPortrait ||
+                   scene.effectiveGeometry.interfaceOrientation == UIInterfaceOrientationPortraitUpsideDown
+                ? UIInterfaceOrientationMaskPortrait : UIInterfaceOrientationMaskLandscape;
+        }
+    }
+    return scene.interfaceOrientation == UIInterfaceOrientationPortrait ||
+           scene.interfaceOrientation == UIInterfaceOrientationPortraitUpsideDown
+        ? UIInterfaceOrientationMaskPortrait : UIInterfaceOrientationMaskLandscape;
+}
+
 - (void)viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];
     if (self.videoLayer == nil) return;
 
-    BOOL portrait = self.view.bounds.size.width < self.view.bounds.size.height;
-    if (portrait == self.lastPortrait) return;
+    UIInterfaceOrientationMask mask = [self currentOrientationMask];
+    BOOL portrait = (mask == UIInterfaceOrientationMaskPortrait);
+
+    // Guard on BOTH the resolved orientation and whether we have ever applied a
+    // transform. The old code early-returned on the first landscape pass because
+    // lastPortrait defaults to NO, so a portrait scene whose view happened to
+    // report landscape bounds never got rotated at all.
+    if (self.hasEverLaidOut && mask == self.lastAppliedMask) return;
+    self.hasEverLaidOut = YES;
+    self.lastAppliedMask = mask;
     self.lastPortrait = portrait;
 
-    Log(LOG_I, @"EXTDISPLAY layout: view=%@ portrait=%d window=%@ screen=%@",
-        NSStringFromCGRect(self.view.bounds), portrait, self.view.window,
-        self.view.window.screen);
+    Log(LOG_I, @"EXTDISPLAY layout: view=%@ portrait=%d mask=%lu window=%@ scene=%@ screen=%@",
+        NSStringFromCGRect(self.view.bounds), portrait, (unsigned long)mask, self.view.window,
+        self.view.window.windowScene, self.view.window.screen);
 
     CALayer *container = self.view.layer;
     [CATransaction begin];

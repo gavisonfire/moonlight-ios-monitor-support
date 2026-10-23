@@ -13,15 +13,23 @@
 @implementation SceneDelegate
 
 - (void)scene:(UIScene *)scene willConnectToSession:(UISceneSession *)session options:(UISceneConnectionOptions *)connectionOptions {
-    UIWindowScene *windowScene = (UIWindowScene *)scene;
-
-    // External display scenes are owned by ExternalDisplayManager, which creates
-    // the dedicated monitor window (with the AVSampleBufferDisplayLayer) and
-    // attaches it to this scene via initWithWindowScene:. Loading the storyboard
-    // here would put a second, mirrored copy of the main UI on the monitor.
-    if (windowScene.screen != [UIScreen mainScreen]) {
+    if (![scene isKindOfClass:[UIWindowScene class]]) {
         return;
     }
+    UIWindowScene *windowScene = (UIWindowScene *)scene;
+
+    // Only the application-role scene carries the app UI. External display
+    // scenes (role UIWindowSceneSessionRoleExternalDisplay) are owned by
+    // ExternalDisplayManager, which creates its own window + video layer.
+    // Checking the scene role is more reliable than comparing UIScreen
+    // identities, which misbehave once the app supports all orientations.
+    if (session.role != UIWindowSceneSessionRoleApplication) {
+        Log(LOG_I, @"SCENE skip non-application role (external display?) screen=%@", windowScene.screen);
+        return;
+    }
+
+    Log(LOG_I, @"SCENE willConnect role=%@ screen=%@ bounds=%@",
+        session.role, windowScene.screen, NSStringFromCGRect(windowScene.screen.bounds));
 
     // Main screen: load the correct storyboard for the current device idiom,
     // mirroring the old UIMainStoryboardFile / UIMainStoryboardFile~ipad keys.
@@ -34,6 +42,8 @@
 
     self.window = window;
     [window makeKeyAndVisible];
+    Log(LOG_I, @"SCENE main window created: storyboard=%@ rootVC=%@ hidden=%d",
+        storyboardName, window.rootViewController, window.hidden);
 }
 
 @end
